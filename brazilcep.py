@@ -26,12 +26,12 @@ class CepWindow(QtWidgets.QWidget):
         self.search_button.clicked.connect(self.search_cep)
         layout.addWidget(self.search_button)
 
-        self.result_area = QtWidgets.QTextEdit()
-        self.result_area.setReadOnly(True)
+        self.result_area = QtWidgets.QWidget()
+        self.result_layout = QtWidgets.QVBoxLayout(self.result_area)
         layout.addWidget(self.result_area)
 
         self.setLayout(layout)
-        
+
         # Adiciona data e hora na parte inferior da janela
         self.time_label = QtWidgets.QLabel()
         layout.addWidget(self.time_label, alignment=QtCore.Qt.AlignBottom)
@@ -46,25 +46,60 @@ class CepWindow(QtWidgets.QWidget):
         self.time_label.setText(current_time)
 
     def search_cep(self):
+        # Limpa o layout de resultados anterior
+        self.clear_results()
+
         cep = self.cep_input.text().replace('-', '')
         try:
             response = requests.get(f'https://viacep.com.br/ws/{cep}/json/')
             data = response.json()
             if 'erro' in data:
-                self.result_area.setText('CEP não encontrado.')
+                self.display_error('CEP não encontrado.')
             else:
-                resultado = (
-                    f"CEP: {data['cep']}\n"
-                    f"Estado: {data['uf']}\n"
-                    f"Cidade: {data['localidade']}\n"
-                    f"Bairro: {data['bairro']}\n"
-                    f"Rua: {data['logradouro']}\n"
-                    f"Complemento: {data.get('complemento', '-')}\n"
-                    f"Número: {data.get('numero', '-')}\n"
+                self.display_result(
+                    ('CEP', data['cep']),
+                    ('Estado', data['uf']),
+                    ('Cidade', data['localidade']),
+                    ('Rua', data['logradouro']),
+                    ('Bairro', data['bairro']),
+                    ('Complemento', data.get('complemento', '-')),
+                    ('Número', data.get('numero', '-'))
                 )
-                self.result_area.setText(resultado)
         except Exception as e:
-            self.result_area.setText(f"Erro ao consultar CEP: {e}")
+            self.display_error(f"Erro ao consultar CEP: {e}")
+
+    def display_result(self, *lines):
+        for i in reversed(range(self.result_layout.count())): 
+            widget = self.result_layout.itemAt(i).widget()
+            if widget is not None: 
+                widget.deleteLater()
+
+        for label_text, value_text in lines:
+            hbox = QtWidgets.QHBoxLayout()
+            label = QtWidgets.QLabel(f"{label_text}: {value_text}")
+            copy_button = QtWidgets.QPushButton('Copiar')
+            copy_button.setStyleSheet('background-color: #A9A9A9; color: white;')
+            copy_button.clicked.connect(lambda _, t=value_text: self.copy_to_clipboard(t))
+            hbox.addWidget(label)
+            hbox.addWidget(copy_button)
+            widget = QtWidgets.QWidget()
+            widget.setLayout(hbox)
+            self.result_layout.addWidget(widget)
+
+    def display_error(self, message):
+        self.clear_results()
+        error_label = QtWidgets.QLabel(message)
+        self.result_layout.addWidget(error_label)
+
+    def clear_results(self):
+        for i in reversed(range(self.result_layout.count())):
+            widget = self.result_layout.itemAt(i).widget()
+            if widget is not None:
+                widget.deleteLater()
+
+    def copy_to_clipboard(self, text):
+        clipboard = QtWidgets.QApplication.clipboard()
+        clipboard.setText(text)
 
 def main():
     app = QtWidgets.QApplication(sys.argv)
